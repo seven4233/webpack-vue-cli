@@ -1,13 +1,9 @@
 const ESLintWebpackPlugin = require('eslint-webpack-plugin')
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 const { VueLoaderPlugin } = require("vue-loader");
-const CssMinimizerPlugin = require("css-minimizer-webpack-plugin");
-// const MiniCssExtractPlugin = require("mini-css-extract-plugin");
-const TerserPlugin = require("terser-webpack-plugin");
+const CopyPlugin = require("copy-webpack-plugin");
 const { DefinePlugin } = require("webpack");
 const path = require('path')
-const os = require('os')
-const threads = os.cpus().length;
 
 module.exports = {
     // entry
@@ -17,8 +13,9 @@ module.exports = {
         // 所有文件的输出路径
         path: undefined,
         //输出的文件名
-        filename: "js/[name].js",
-
+        filename: "static/js/[name].js",
+        chunkFilename: "static/js/[name].chunk.js",
+        assetModuleFilename: "static/js/[hash:10][ext][query]",
     },
     //加载器
     module: {
@@ -65,21 +62,14 @@ module.exports = {
                 test: /\.js$/,
                 // exclude: /(node_modules|bower_components)/, //排除目录
                 include: path.resolve(__dirname, '../src'),
-                use: [
-                    {
-                        loader: "thread-loader", // 开启多进程
-                        options: {
-                            workers: threads, // 数量
-                        },
-                    },
-                    {
-                        loader: "babel-loader",
-                        options: {
-                            cacheDirectory: true, // 开启babel编译缓存
-                            cacheCompression: false, // 缓存文件不要压缩
-                            plugins: ["@babel/plugin-transform-runtime"], // 减少代码体积
-                        },
-                    }]
+                loader: "babel-loader",
+                options: {
+                    cacheDirectory: true,
+                    cacheCompression: false,
+                    plugins: [
+                        // "@babel/plugin-transform-runtime" // presets中包含了
+                    ],
+                },
             },
             {
                 test: /\.vue$/,
@@ -105,7 +95,6 @@ module.exports = {
             exclude: "node_modules",
             cache: true,
             cacheLocation: path.resolve(__dirname, '../node_modules/.cache/.eslintcache'),
-            threads
 
         }),
         new HtmlWebpackPlugin({
@@ -116,6 +105,22 @@ module.exports = {
             __VUE_OPTIONS_API__: true,
             __VUE_PROD_DEVTOOLS__: false,
         }),
+        new CopyPlugin({
+            patterns: [
+                {
+                    from: path.resolve(__dirname, "../public"),
+                    to: path.resolve(__dirname, "../dist"),
+                    toType: "dir",
+                    noErrorOnMissing: true,
+                    globOptions: {
+                        ignore: ["**/index.html"],
+                    },
+                    info: {
+                        minimized: true,
+                    },
+                },
+            ],
+        }),
         // new PreloadWebpackPlugin({
         //     rel: "preload", // preload兼容性更好
         //     as: "script",
@@ -125,41 +130,19 @@ module.exports = {
 
     ],
     optimization: {
-        minimize: true,
         splitChunks: {
             chunks: "all",
-            cacheGroups: {
-                vue: {
-                    name: "vue",
-                    test: /[\\/]node_modules[\\/]vue(.*)[\\/]/,
-                    chunks: "initial",
-                    priority: 20,
-                },
-                libs: {
-                    name: "chunk-libs",
-                    test: /[\\/]node_modules[\\/]/,
-                    priority: 10, // 权重最低，优先考虑前面内容
-                    chunks: "initial",
-                },
-            }
+
         },
         runtimeChunk: {
             name: (entrypoint) => `runtime~${entrypoint.name}.js`,
         },
-        minimizer: [
-            // css压缩也可以写到optimization.minimizer里面，效果一样的
-            new CssMinimizerPlugin(),
-            // 当生产模式会默认开启TerserPlugin，但是我们需要进行其他配置，就要重新写了
-            new TerserPlugin({
-                parallel: threads // 开启多进程
-            }),
-        ],
     },
     //开发服务器
     devServer: {
-        host: '0.0.0.0',
         open: true,
         hot: true,
+        compress: true,
         historyApiFallback: true,
     },
 
@@ -175,6 +158,5 @@ module.exports = {
 
     mode: 'development',
     devtool: 'cheap-module-source-map', //只有行映射
-    performance: false,
 
 }
